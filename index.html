@@ -1515,13 +1515,7 @@ html:fullscreen {
           ID folder akan dimuat otomatis dari server
         </small>
       </div>
-      <div class="setting-item">
-        <span class="setting-label">URL Apps Script</span>
-        <input type="text" class="folder-id-input" id="appsScriptUrl" value="https://script.google.com/macros/s/AKfycbzKJPqNjlNi6VLhCZdImzDt2mgAPZM934n_-eayVsajVRvl3fGCr-kEXEkDA-Pa6tHYzw/exec" placeholder="URL Apps Script">
-        <small style="color: var(--gold-light); display: block; margin-top: 5px;">
-          URL Apps Script (jangan diubah)
-        </small>
-      </div>
+      <!-- INPUT URL APPS SCRIPT TIDAK ADA DI SINI - HANYA 1 URL DI SCRIPT -->
       <button class="settings-btn-small" id="loadDriveBtn" style="width:100%;">♻️ Load dari Google Drive</button>
     </div>
     
@@ -1825,10 +1819,14 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
   // ===== KONFIGURASI VERSI APLIKASI =====
   const APP_VERSION = '1.0.0';
   
-  // ===== KONFIGURASI GOOGLE DRIVE (AKAN DIISI DARI SERVER) =====
+  // ===== INI SATU-SATUNYA URL YANG ADA DI HTML =====
+  // URL APPS SCRIPT YANG TETAP (TIDAK PERNAH BERUBAH)
+  const BASE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzKJPqNjlNi6VLhCZdImzDt2mgAPZM934n_-eayVsajVRvl3fGCr-kEXEkDA-Pa6tHYzw/exec';
+  
+  // ===== KONFIGURASI GOOGLE DRIVE =====
   let CONFIG = {
-    APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzKJPqNjlNi6VLhCZdImzDt2mgAPZM934n_-eayVsajVRvl3fGCr-kEXEkDA-Pa6tHYzw/exec',
-    GOOGLE_DRIVE_FOLDER_ID: ''
+    APPS_SCRIPT_URL: BASE_SCRIPT_URL,  // URL tetap
+    GOOGLE_DRIVE_FOLDER_ID: ''         // Akan diisi dari server via action=config
   };
   
   // ===== FUNGSI UTAMA APLIKASI =====
@@ -1900,14 +1898,12 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
     // ===== REGISTER SERVICE WORKER (Opsional) =====
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        // Coba register service worker dengan error handling yang lebih baik
         try {
           navigator.serviceWorker.register('sw.js')
             .then(reg => {
               console.log('✅ Service Worker registered:', reg.scope);
             })
             .catch(err => {
-              // Abaikan error 404, tetap lanjutkan aplikasi
               console.log('ℹ️ Service worker tidak tersedia (akan berjalan tanpa PWA)');
             });
         } catch (e) {
@@ -2062,6 +2058,47 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
       }, 10000);
     }
 
+    // ===== AMBIL KONFIGURASI DARI SERVER (FOLDER ID) =====
+    async function loadConfigFromServer() {
+      try {
+        console.log('🔄 Mengambil folder ID dari server...');
+        
+        const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?action=config`);
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          CONFIG.GOOGLE_DRIVE_FOLDER_ID = data.googleDriveFolderId;
+          
+          // Update input field
+          const folderIdInput = document.getElementById('googleDriveFolderId');
+          if (folderIdInput) {
+            folderIdInput.value = CONFIG.GOOGLE_DRIVE_FOLDER_ID;
+          }
+          
+          // Update Google Drive button link
+          const googleDriveBtn = document.getElementById('googleDriveBtn');
+          if (googleDriveBtn && CONFIG.GOOGLE_DRIVE_FOLDER_ID) {
+            googleDriveBtn.href = `https://drive.google.com/drive/folders/${CONFIG.GOOGLE_DRIVE_FOLDER_ID}?usp=sharing`;
+          }
+          
+          console.log('✅ Folder ID dimuat:', CONFIG.GOOGLE_DRIVE_FOLDER_ID);
+          
+          // Auto load setelah config didapat
+          setTimeout(() => {
+            loadFromGoogleDrive(false);
+          }, 500);
+          
+          return true;
+        } else {
+          throw new Error('Gagal mengambil konfigurasi');
+        }
+      } catch (error) {
+        console.error('❌ Gagal mengambil folder ID:', error);
+        document.getElementById('folderInfoText').innerHTML = '❌ Gagal load folder ID dari server';
+        return false;
+      }
+    }
+
     // ===== VARIABLES =====
     let slides = [];
     let currentSlide = 0;
@@ -2177,7 +2214,6 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
     const hfsIpInput = document.getElementById('hfsIpInput');
     const hfsPortInput = document.getElementById('hfsPortInput');
     const googleDriveFolderId = document.getElementById('googleDriveFolderId');
-    const appsScriptUrl = document.getElementById('appsScriptUrl');
     const loadDriveBtn = document.getElementById('loadDriveBtn');
     const googleDriveBtn = document.getElementById('googleDriveBtn');
     
@@ -2229,74 +2265,6 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
     settingsPanel?.addEventListener("mouseleave", () => {
       if (autoHideEnabled) resetHideTimer();
     });
-
-    // ===== FUNGSI AMBIL KONFIGURASI DARI SERVER =====
-    async function loadConfigFromServer() {
-      try {
-        console.log('🔄 Memuat konfigurasi dari server...');
-        
-        const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?action=config`);
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-          // Update CONFIG object
-          CONFIG.GOOGLE_DRIVE_FOLDER_ID = data.googleDriveFolderId || CONFIG.GOOGLE_DRIVE_FOLDER_ID;
-          
-          // Update input field
-          if (googleDriveFolderId) {
-            googleDriveFolderId.value = CONFIG.GOOGLE_DRIVE_FOLDER_ID;
-            googleDriveFolderId.placeholder = "ID Folder";
-          }
-          
-          // Update Google Drive button link
-          if (googleDriveBtn && CONFIG.GOOGLE_DRIVE_FOLDER_ID) {
-            googleDriveBtn.href = `https://drive.google.com/drive/folders/${CONFIG.GOOGLE_DRIVE_FOLDER_ID}?usp=sharing`;
-          }
-          
-          console.log('✅ Konfigurasi dimuat:', CONFIG);
-          
-          // Auto load setelah config didapat
-          setTimeout(() => {
-            loadFromGoogleDrive(false);
-          }, 500);
-          
-          return true;
-        } else {
-          throw new Error('Gagal memuat konfigurasi');
-        }
-      } catch (error) {
-        console.error('❌ Gagal memuat konfigurasi:', error);
-        
-        // Fallback ke nilai dari localStorage jika ada
-        const savedFolderId = localStorage.getItem('lastFolderId');
-        if (savedFolderId && googleDriveFolderId) {
-          googleDriveFolderId.value = savedFolderId;
-          CONFIG.GOOGLE_DRIVE_FOLDER_ID = savedFolderId;
-          
-          if (googleDriveBtn) {
-            googleDriveBtn.href = `https://drive.google.com/drive/folders/${savedFolderId}?usp=sharing`;
-          }
-          
-          // Coba load dengan folder ID yang tersimpan
-          setTimeout(() => {
-            loadFromGoogleDrive(false);
-          }, 500);
-        } else {
-          // Fallback ke folder ID default
-          CONFIG.GOOGLE_DRIVE_FOLDER_ID = '1_RoEmOSpJFj6yCO_dn5f7nBVAXQScOHJ';
-          if (googleDriveFolderId) {
-            googleDriveFolderId.value = CONFIG.GOOGLE_DRIVE_FOLDER_ID;
-          }
-          if (googleDriveBtn) {
-            googleDriveBtn.href = `https://drive.google.com/drive/folders/${CONFIG.GOOGLE_DRIVE_FOLDER_ID}?usp=sharing`;
-          }
-          
-          folderInfoText.innerHTML = `♻️ Menggunakan folder ID default (gagal load dari server)`;
-        }
-        
-        return false;
-      }
-    }
 
     // ===== FUNGSI ANIMASI SLIDE =====
     function getNextAnimation() {
@@ -2361,12 +2329,7 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
       
       autoUpdateInterval = setInterval(async () => {
         try {
-          // Ambil folder ID terbaru dari input field
-          const currentFolderId = googleDriveFolderId ? googleDriveFolderId.value.trim() : CONFIG.GOOGLE_DRIVE_FOLDER_ID;
-          
-          if (!currentFolderId) return;
-          
-          const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?folderId=${currentFolderId}`);
+          const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?folderId=${CONFIG.GOOGLE_DRIVE_FOLDER_ID}`);
           const data = await response.json();
           
           const currentVersion = data.files ? data.files.map(f => f.id).join(',') : '';
@@ -2418,6 +2381,7 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
           video.className = 'video-main main';
           video.src = file.url;
           video.volume = videoMuted ? 0 : (videoVolume / 100);
+          video.setAttribute('playsinline', '');
           slide.appendChild(video);
         }
         
@@ -2444,20 +2408,10 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
         loadingIndicator.classList.add("show");
       }
       folderInfo.classList.remove('hide');
-      
-      // Ambil folder ID dari input field
-      const currentFolderId = googleDriveFolderId ? googleDriveFolderId.value.trim() : CONFIG.GOOGLE_DRIVE_FOLDER_ID;
-      
-      if (!currentFolderId) {
-        folderInfoText.innerHTML = '♻️ Folder ID tidak ditemukan!';
-        if (!silent) loadingIndicator.classList.remove("show");
-        return;
-      }
-
-      folderInfoText.innerHTML = `♻️ Menghubungi Google Drive (Folder: ${currentFolderId.substring(0, 10)}...)`;
+      folderInfoText.innerHTML = `♻️ Menghubungi Google Drive...`;
 
       try {
-        const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?folderId=${currentFolderId}`);
+        const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?folderId=${CONFIG.GOOGLE_DRIVE_FOLDER_ID}`);
         
         if (!response.ok) {
           throw new Error(`Gagal mengakses (${response.status})`);
@@ -2474,9 +2428,6 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
           if (!silent) loadingIndicator.classList.remove("show");
           return;
         }
-
-        // Simpan folder ID terakhir ke localStorage
-        localStorage.setItem('lastFolderId', currentFolderId);
 
         // Reset array lokal untuk menyimpan file baru
         const driveImages = [];
@@ -2534,13 +2485,7 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
     }
 
     if (loadDriveBtn) {
-      loadDriveBtn.addEventListener('click', () => {
-        // Update folder ID dari input sebelum load
-        if (googleDriveFolderId) {
-          CONFIG.GOOGLE_DRIVE_FOLDER_ID = googleDriveFolderId.value.trim();
-        }
-        loadFromGoogleDrive(false);
-      });
+      loadDriveBtn.addEventListener('click', () => loadFromGoogleDrive(false));
     }
 
     // ===== FUNGSI HFS =====
@@ -3313,7 +3258,7 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
           logoLeft: logoLeftData,
           logoRight: logoRightData,
           warnaBergantianEnabled: warnaBergantianEnabled,
-          lastFolderId: googleDriveFolderId ? googleDriveFolderId.value : ''
+          lastFolderId: CONFIG.GOOGLE_DRIVE_FOLDER_ID
         }));
         alert('Settings saved!');
         settingsPanel.classList.add('hide');
@@ -3369,12 +3314,6 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
         if (data.logoRight) {
           logoRightData = data.logoRight;
           updateLogo('right', logoRightData);
-        }
-        
-        // Load last folder ID jika ada
-        if (data.lastFolderId && googleDriveFolderId) {
-          googleDriveFolderId.value = data.lastFolderId;
-          CONFIG.GOOGLE_DRIVE_FOLDER_ID = data.lastFolderId;
         }
         
         document.getElementById('videoVolumeValue').textContent = videoVolume + '%';
@@ -3457,7 +3396,7 @@ silahkan atur animasi slide maupun type fonts dan pengaturan lainnya </textarea>
     if (slideMode === 'fixed') fixedAnimationContainer.style.display = 'block';
     else fixedAnimationContainer.style.display = 'none';
     
-    // Load config dari server, lalu auto load Google Drive
+    // Load config dari server (ambil folder ID), lalu auto load Google Drive
     setTimeout(() => {
       loadConfigFromServer();
     }, 500);
